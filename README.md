@@ -9,7 +9,7 @@ pip install -r requirements.txt
 Hardware requirements: nvidia GPU(memory > 12GB), 8GB RAM
 Program language: python
 Software required: Pytorch, torchvision, numpy, PIL, labelme, onnx, onnxruntime,  opencv-python
-Program size: 152MB
+Program size: 5MB
 ,,,
 
 
@@ -42,7 +42,7 @@ Prepare at least two background images for each type of region.
 python3  -m torch.distributed.launch --nproc_per_node 2 train.py --img 1280 --batch 8 --epoch 20  --data data/keng.yaml --cfg models/keng_yolov5l.yaml --weights weights/yolov5l6.pt --hyp data/hyps/hyp.keng.yaml
 ```
 
-## Model Validation
+### Model Validation
 ```shell
 python3 detect.py --imgsz 1280 --weights /path/weights/best.pt --source VOC/images/test/
 

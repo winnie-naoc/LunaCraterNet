@@ -42,13 +42,13 @@ Prepare at least two background images for each type of region.
 python3  -m torch.distributed.launch --nproc_per_node 2 train.py --img 1280 --batch 8 --epoch 20  --data data/keng.yaml --cfg models/keng_yolov5l.yaml --weights weights/yolov5l6.pt --hyp data/hyps/hyp.keng.yaml
 ```
 
-#### Model Validation
+## Model Validation
 ```shell
 python3 detect.py --imgsz 1280 --weights /path/weights/best.pt --source VOC/images/test/
 
 ```
 
-# Model Conversion
+## Model Conversion
 python3 export.py --weights /path/weights/best.pt --imgsz 1280 --include onnx
 python inference.py --images-dir="/path/to/images" --target-dir="/path/to/target" --onnx-model-path="/path/to/model.onnx" --conf-thre=0.25
 ```

@@ -1,7 +1,7 @@
 # LunaCraterNet
 We propose a novel method using the YOLOv5l deep learning model to detect small craters on the Moon's surface. By leveraging a high-quality, diverse dataset with data augmentation and optimization, we enhanced the model's detection performance. This document explains the procedures used in the detection process.
 
-## 安装
+## Install
 ```shell
 pip install -r requirements.txt
 ```
@@ -13,7 +13,7 @@ Program size: 152MB
 ,,,
 
 
-## 样本制作
+## Sample Synthesis and Generation
 The synthesis and generation of crater samples is a key feature of this study. Unlike the traditional method of manual annotation, this project builds upon manual labeling and employs image processing algorithms to synthesize a large number of crater samples. This significantly expands the size of the training dataset and enhances the model's generalization ability. The detailed sample generation process is as follows:
 1. Preparation of Original Images
 Select and download the original lunar map subdivisions from the following link: https://doi.org/10.12350/CLPDS.GRAS.CE2.DOM-7m.vA. After downloading, convert the images from TIFF format to JPG format while maintaining the original resolution.

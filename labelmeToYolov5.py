@@ -8,7 +8,8 @@ from os import getcwd
  
 classes = ["keng"]
 # 1.标签路径
-labelme_path = "yueqiu/"
+labelme_path = "/DATA01/show_resources/generated_1209/images/"    # labelme标注文件路径, 注意最后一个字符必须是/
+image_ext = ".png"   # 图片格式
 isUseTest = True  # 是否创建test集
 # 3.获取待处理文件
 files = glob(labelme_path + "*.json")
@@ -46,11 +47,11 @@ def ChangeToYolo5(files, txt_Name):
     list_file = open('tmp/%s.txt' % (txt_Name), 'w')
     for json_file_ in files:
         json_filename = labelme_path + json_file_ + ".json"
-        imagePath = labelme_path + json_file_ + ".jpg"
-        list_file.write('%s/%s\n' % (wd, imagePath))
+        imagePath = labelme_path + json_file_ + image_ext
+        list_file.write('%s\n' % (imagePath))
         out_file = open('%s/%s.txt' % (labelme_path, json_file_), 'w')
         json_file = json.load(open(json_filename, "r", encoding="utf-8"))
-        height, width, channels = cv2.imread(labelme_path + json_file_ + ".jpg").shape
+        height, width, channels = cv2.imread(labelme_path + json_file_ + image_ext).shape
         for multi in json_file["shapes"]:
             points = np.array(multi["points"])
             xmin = min(points[:, 0]) if min(points[:, 0]) > 0 else 0

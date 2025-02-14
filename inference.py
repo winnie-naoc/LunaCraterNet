@@ -1,14 +1,10 @@
-'''
-启动命令：
-python your_script.py --images-dir="/path/to/images" --target-dir="/path/to/target" --onnx-model-path="/path/to/model.onnx" --conf-thre=0.25
-'''
 import os
 os.environ.setdefault('OPENCV_IO_MAX_IMAGE_PIXELS', '2000000000')
 import cv2
 
 import numpy as np
 import onnxruntime as rt
-import argparse
+
 import json
 import base64
 import copy
@@ -17,7 +13,7 @@ labelme_content = {
   "version": "4.5.6",
   "flags": {},
   "shapes":[],
-  "imagePath": "xx.jpg",
+  "imagePath": "20191231_S162.jpg",
   "imageData":"", 
   "imageHeight": 2736,
   "imageWidth": 3648
@@ -265,6 +261,193 @@ def scale_boxes(img1_shape, boxes, img0_shape, ratio_pad=None):
     return boxes
  
 
+class YOLOv11:
+    """YOLOv11 object detection model class for handling inference and visualization."""
+
+    def __init__(self, onnx_model, confidence_thres, iou_thres):
+        """
+        Initialize the YOLOv11 model for object detection.
+
+        Args:
+            onnx_model (str): Path to the ONNX model.
+            confidence_thres (float): Confidence threshold for filtering detections.
+            iou_thres (float): IoU threshold for non-maximum suppression (NMS).
+        """
+        # Load the ONNX model and specify the providers (CUDA and CPU)
+        self.onnx_model = onnx_model
+        self.session = rt.InferenceSession(self.onnx_model,
+                                            providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
+        self.confidence_thres = confidence_thres
+        self.iou_thres = iou_thres
+        self.model_inputs = self.session.get_inputs()
+
+        # Store the shape of the input for later use
+        self.input_width = self.model_inputs[0].shape[2]
+        self.input_height = self.model_inputs[0].shape[3]
+
+        # Load the class names from the COCO dataset (80 classes)
+        self.classes = ['keng']
+        # Generate a color palette for the classes (random colors for each class)
+        self.color_palette = np.random.uniform(0, 255, size=(len(self.classes), 3))
+
+    def draw_detections(self, img, box, score, class_id):
+        """
+        Draws bounding boxes and labels on the input image based on the detected objects.
+
+        Args:
+            img: The input image to draw detections on.
+            box: Detected bounding box.
+            score: Corresponding detection score.
+            class_id: Class ID for the detected object.
+
+        Returns:
+            None
+        """
+        # Extract the coordinates of the bounding box
+        x1, y1, w, h = box
+
+        # Retrieve the color for the class ID
+        color = self.color_palette[class_id]
+
+        # Draw the bounding box on the image
+        cv2.rectangle(img, (int(x1), int(y1)), (int(x1 + w), int(y1 + h)), color, 2)
+
+        # Create the label text with class name and score
+        label = f"{self.classes[class_id]}: {score:.2f}"
+
+        # Calculate the dimensions of the label text
+        (label_width, label_height), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+
+        # Calculate the position of the label text
+        label_x = x1
+        label_y = y1 - 10 if y1 - 10 > label_height else y1 + 10
+
+        # Draw a filled rectangle as the background for the label text
+        cv2.rectangle(
+            img, (label_x, label_y - label_height), (label_x + label_width, label_y + label_height), color, cv2.FILLED
+        )
+
+        # Draw the label text on the image
+        cv2.putText(img, label, (label_x, label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
+
+    def preprocess(self, image):
+        """
+        Preprocess the input image before inference.
+
+        Args:
+            image: The input image to be preprocessed.
+
+        Returns:
+            Preprocessed image data in the expected format for the model.
+        """
+        # Convert the image color space from BGR to RGB
+        img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+        # Resize the image to match the input shape expected by the model
+        img = cv2.resize(img, (self.input_width, self.input_height))
+
+        # Normalize the image data by dividing by 255.0 to bring pixel values between 0 and 1
+        image_data = np.array(img) / 255.0
+
+        # Transpose the image to have the channel dimension as the first dimension
+        image_data = np.transpose(image_data, (2, 0, 1))  # Channel first
+
+        # Expand the dimensions of the image data to match the expected input shape (batch size 1)
+        image_data = np.expand_dims(image_data, axis=0).astype(np.float32)
+
+        # Return the preprocessed image data
+        return image_data
+
+    def postprocess(self, input_image, output):
+        """
+        Post-process the model's output to get final bounding boxes, scores, and class IDs.
+
+        Args:
+            input_image: The original input image.
+            output: The model's raw output.
+
+        Returns:
+            The input image with bounding boxes and labels drawn.
+        """
+        # Transpose and squeeze the output to match the expected shape
+        outputs = np.transpose(np.squeeze(output[0]))
+
+        # Get the number of rows in the outputs array (number of detections)
+        rows = outputs.shape[0]
+
+        # Lists to store the bounding boxes, scores, and class IDs of the detections
+        boxes = []
+        scores = []
+        class_ids = []
+
+        # Calculate the scaling factors for the bounding box coordinates
+        img_height, img_width = input_image.shape[:2]
+        x_factor = img_width / self.input_width
+        y_factor = img_height / self.input_height
+
+        # Iterate over each row in the outputs array
+        for i in range(rows):
+            # Extract the class scores from the current row
+            classes_scores = outputs[i][4:]
+
+            # Find the maximum score among the class scores
+            max_score = np.amax(classes_scores)
+
+            # If the maximum score is above the confidence threshold
+            if max_score >= self.confidence_thres:
+                # Get the class ID with the highest score
+                class_id = np.argmax(classes_scores)
+
+                # Extract the bounding box coordinates from the current row
+                x, y, w, h = outputs[i][0], outputs[i][1], outputs[i][2], outputs[i][3]
+
+                # Calculate the scaled coordinates of the bounding box
+                left = int((x - w / 2) * x_factor)
+                top = int((y - h / 2) * y_factor)
+                width = int(w * x_factor)
+                height = int(h * y_factor)
+
+                # Add the class ID, score, and box coordinates to the respective lists
+                class_ids.append(class_id)
+                scores.append(max_score)
+                boxes.append([left, top, width, height])
+
+        # Apply non-maximum suppression to filter out overlapping bounding boxes
+        indices = cv2.dnn.NMSBoxes(boxes, scores, self.confidence_thres, self.iou_thres)
+        
+        post_outputs = []
+        for i in indices:
+            # Get the box, score, and class ID corresponding to the index
+            box = boxes[i]
+            score = scores[i]
+            class_id = class_ids[i]
+
+            # Append the box, score, and class ID to the list of post-processed outputs
+            post_outputs.append({'box': box, 'score': score, 'class_id': class_id})
+
+
+        # Return the image with detections drawn
+        return post_outputs
+
+    def inference(self, input_image):
+        """
+        Run the full pipeline: preprocess, inference, postprocess.
+
+        Args:
+            input_image: The image to run detection on.
+
+        Returns:
+            The processed image with detections.
+        """
+        # Preprocess the image
+        img_data = self.preprocess(input_image)
+
+        # Run inference on the preprocessed image
+        outputs = self.session.run(None, {self.model_inputs[0].name: img_data})
+
+        # Postprocess the output and return the final image
+        return self.postprocess(input_image, outputs)
+    
 class MoonDedectionModel(object):
     def __init__(self,model_path) -> None:
         print("MoonDedectionModel loading ....")
@@ -272,9 +455,7 @@ class MoonDedectionModel(object):
         self.img_size = (1280,1280)
         onnxModulePath = model_path#"/DATA01/yolov5-7.0-train/opt_models/gray_zoon_0521/best.onnx"
         providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
-        self.session = session = rt.InferenceSession(onnxModulePath, providers=providers)
-        self.output_names = [x.name for x in session.get_outputs()]
-        self.input_name = session.get_inputs()[0].name
+        self.model = YOLOv11(onnxModulePath,0.2,0.4)
 
     def preprocess(self,img):
         img = cv2.resize(img, self.img_size)
@@ -295,52 +476,27 @@ class MoonDedectionModel(object):
               img: local path  or np.ndarray of image
         output:
         '''
-        im = self.preprocess(img)
-        pred = self.session.run(self.output_names, {self.input_name: im.reshape(1, 3, 1280, 1280).astype(np.float32)})
-        
-        conf_thres = 0.1  # confidence threshold
-        iou_thres = 0.5  # NMS IOU threshold
-        max_det = 2000  # maximum detections per image
-        classes = None  # filter by class: --class 0, or --class 0 2 3
-        agnostic_nms = False  # class-agnostic NMS
-        pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
-    
-        # Process predictions
-        seen = 0
-        for i, det in enumerate(pred):  # per image
-            seen += 1
-            if len(det):
-                # Rescale boxes from img_size to im0 size
-                det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], img.shape).round()
+        outputs = self.model.inference(img)
         # print(pred)
-        outputs = pred[0][:, :6]
         ret=[]
         count_list = [0,0]
-        if len(outputs[:, 4:] > 0):
-            for i in outputs:
-                prob = i[4]
-                cls = int(i[5])
-                prob = np.around(prob, decimals=2)
-                if prob >= conf_thres:
-                    all_pred_boxes = i[:4]
-                    # x1 = int(all_pred_boxes[0])
-                    # y1 = int(all_pred_boxes[1])
-                    # x2 = int(all_pred_boxes[2])
-                    # y2 = int(all_pred_boxes[3])
-                    x1 = max(0,int(all_pred_boxes[0]))
-                    y1 = max(0,int(all_pred_boxes[1]))
-                    x2 = min(int(all_pred_boxes[2]),1280)
-                    y2 = min(int(all_pred_boxes[3]),1280)
-                    if (x2-x1)*7>400:
-                        count_list[0] += 1
-                    else:
-                        count_list[1] += 1
+        if len(outputs) > 0:
+            for output in outputs:
+                prob = output['score']
+                cls = output['class_id']
+                x1 = output['box'][0]
+                y1 = output['box'][1]
+                x2 = output['box'][2] + x1
+                y2 = output['box'][3] + y1
 
-                    box_ret = {"bbox":[x1,y1,x2,y2],"prob":prob}
-                    ret.append(box_ret)
-                        # cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 1)
-                        # cv2.putText(img, CLASSES[cls]+' '+str(prob), (x1, y1), cv2.FONT_HERSHEY_TRIPLEX, 0.8, (0, 255, 0), 1, 4)
-                        # cv2.imwrite('/data1/dengtao/develop_dt/yolov5-train/yolov5-7.0/opt_models/ret.jpg', img)
+                if (x2-x1)*7>400:
+                    count_list[0] += 1
+                else:
+                    count_list[1] += 1
+
+                box_ret = {"bbox":[x1,y1,x2,y2],"prob":prob}
+                ret.append(box_ret)
+                
         print("count_list:",count_list)
         return ret,count_list
     
@@ -421,18 +577,11 @@ def load_image_base64(img_path: str):
         return img
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description='Process some paths.')  
-    parser.add_argument('--images-dir', type=str, help='Path to the images directory.')  
-    parser.add_argument('--target-dir', type=str, help='Path to the target directory.')  
-    parser.add_argument('--onnx-model-path', type=str, help='Path to the ONNX model.')  
-    parser.add_argument('--conf-thre', type=float, help='Confidence threshold.')  
-      
-    args = parser.parse_args()  
-      
-    images_dir = args.images_dir if args.images_dir else "/DATA02/CE2_7m_JPG/I区/"  
-    target_dir = args.target_dir if args.target_dir else "/DATA02/CE2_7m_JPG/results/I区/"  
-    onnx_model_path = args.onnx_model_path if args.onnx_model_path else "/DATA01/yolov5-7.0-train/train_records/0629/weights/best.onnx"  
-    conf_thre = args.conf_thre if args.conf_thre else 0.15  
+    images_dir = "/DATA02/CE2_7m_JPG/C区/"
+    target_dir = "/DATA02/CE2_7m_JPG/results/C区/"
+    # #onnx_model_path = "/DATA01/yolov5-7.0-train/train_records/0128/weights/best.onnx"   
+    onnx_model_path = "/DATA01/yolov11/runs/train/exp2/weights/best.onnx" 
+    conf_thre = 0.15
 
     pdm = MoonDedectionModel(onnx_model_path)
 
@@ -481,7 +630,7 @@ if __name__ == "__main__":
                 
                 bbox_dp[str(row)+'_'+str(col)] = r_bboxes
                 box_duplicate_removal(bbox_dp,row,col)
-
+        print("+++++++++++++++count list:",count_list)
 
 
         for idx in bbox_dp:
@@ -490,6 +639,7 @@ if __name__ == "__main__":
 
 
         target_file = os.path.join(target_dir,"result_" + grayimg_file)
+        cv2.imwrite(target_file,ori_img)
 
         # 生成与图像对应的标注文件
         new_data = copy.deepcopy(labelme_content)
@@ -509,3 +659,4 @@ if __name__ == "__main__":
         label_json_str = json.dumps(new_data)
         with open(target_json_file,'w') as f:
             f.write(label_json_str)
+        print("+++++++++++++++count list:",count_list)

@@ -13,10 +13,10 @@ import numpy as np
 import time
 
 
-bg_dir = "/DATA02/0628_dataset/bg_0628"               # 背景图像目录
-labeled_dir = "/DATA02/0628_dataset/label_0628"       # 已标注的样本目录
-generated_dir = "/DATA02/0628_dataset/generate_0628"  # 生成样本目录
-
+bg_dir = "/DATA01/show_resources/background_images"               # 背景图像目录
+labeled_dir = "/DATA01/show_resources/labelme_files"              # 已标注的样本目录
+generated_dir = "/DATA01/show_resources/generated_1209"           # 生成样本目录
+date_dd = "_1209_"                                                # 时间标签（会体现在文件名上）
 
 generated_type = ""  # 生成样式
 
@@ -121,7 +121,6 @@ for backimg_file in backimg_files:
     # cv.imwrite(new_backimg_file,backimg)
 
 candidata_dir_list = ["images"]
-data_dd = "_628_"
 
 for candidata_dir in candidata_dir_list:
     labeled_dir_2 = os.path.join(labeled_dir,candidata_dir)
@@ -139,7 +138,7 @@ for candidata_dir in candidata_dir_list:
             data = json.loads(f.read())
             # 1.读取对应的图像
             # img_path = data['imagePath']
-            prefix_name = labeljson.split("/")[-1].split(".")[0] + data_dd
+            prefix_name = labeljson.split("/")[-1].split(".")[0] + date_dd
             # img_path = os.path.join(labeled_dir,img_path)
             img_path = labeljson
             img_path = img_path.replace("json","png")# png或者jpg

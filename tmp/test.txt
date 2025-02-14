@@ -1,0 +1,8 @@
+/DATA01/show_resources/generated_1209/images/CE2_GRAS_DOM_C104_66N127W_A_0_6_1209__0_1.png
+/DATA01/show_resources/generated_1209/images/CE2_GRAS_DOM_C104_66N127W_A_0_31_1209__1_1.png
+/DATA01/show_resources/generated_1209/images/CE2_GRAS_DOM_C104_66N127W_A_0_8_1209__0_0.png
+/DATA01/show_resources/generated_1209/images/CE2_GRAS_DOM_C104_66N127W_A_0_27_1209__1_0.png
+/DATA01/show_resources/generated_1209/images/CE2_GRAS_DOM_C104_66N127W_A_0_27_1209__0_0.png
+/DATA01/show_resources/generated_1209/images/CE2_GRAS_DOM_C104_66N127W_A_0_27_1209__0_1.png
+/DATA01/show_resources/generated_1209/images/CE2_GRAS_DOM_C104_66N127W_A_0_30_1209__1_1.png
+/DATA01/show_resources/generated_1209/images/CE2_GRAS_DOM_C104_66N127W_A_5_21_1209__0_0.png
